@@ -284,52 +284,17 @@ if (navGroup) {
     }
     function clearSpatialFilter() { polygonFilter = null; drawPoints = []; if (map.getSource('draw-path')) map.getSource('draw-path').setData({ type: 'FeatureCollection', features: [] }); filterProjects(); }
 
-// 修正後的 switchStyle 函數，確保切換底圖時 3D 建物與地形能正確重新掛載
 function switchStyle(val) {
-    const newStyle = (val === 'osm' ? osmStyle : esriStyle);
-    map.setStyle(newStyle);
+    map.setStyle(val === 'osm' ? osmStyle : esriStyle);
     
     map.once('style.load', () => {
-        // 如果是衛星影像，優化顯示效果
         if (val === 'esri') {
+            // 強制影像圖層使用雙線性過濾，減少不同階層間的顆粒與色差感
             if (map.getLayer('esri-layer')) {
                 map.setPaintProperty('esri-layer', 'raster-resampling', 'linear');
-                map.setPaintProperty('esri-layer', 'raster-fade-duration', 500);
+                map.setPaintProperty('esri-layer', 'raster-fade-duration', 500); // 延長淡入時間
             }
         }
-        
-        // 重新檢查並加入 3D 建物 (如果是切換回 OSM)
-        if (val === 'osm' && !map.getLayer('3d-buildings')) {
-            if (!map.getSource('osm-buildings')) {
-                map.addSource('osm-buildings', buildings);
-            }
-            map.addLayer({
-                "id": "3d-buildings",
-                "type": "fill-extrusion",
-                "source": "osm-buildings",
-                "source-layer": "building",
-                "paint": {
-                    "fill-extrusion-color": "#fff",
-                    "fill-extrusion-height": ["get", "height"],
-                    "fill-extrusion-opacity": 0.6
-                }
-            });
-        }
-
-        // 重新掛載地形數據源
-        if (!map.getSource('t-rgb')) {
-            map.addSource('t-rgb', terrainRGB);
-        }
-        if (terrainEnabled) {
-            map.setTerrain({ 'source': 't-rgb', 'exaggeration': 1.5 });
-        }
-
-        // 重要：重新把 Marker 畫上去（避免 Style 切換導致 Marker 消失）
-        projectData.forEach(p => {
-            if (p.selected && p.marker) p.marker.addTo(map);
-        });
-    });
-}
         // ...其餘現有的 3D 建物載入邏輯...
     });
 }    function toggleAccordion(h, id) { h.classList.toggle('active'); document.getElementById(id).classList.toggle('show'); }
