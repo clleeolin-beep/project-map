@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>惇陽實績地圖 - 3D 專業整合修正版</title>
+    <title>惇陽實績地圖</title>
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -34,19 +34,16 @@
         .range-slider-container input::-webkit-slider-thumb { position: relative; z-index: 5; pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #1A5276; -webkit-appearance: none; cursor: pointer; border: 2px solid #fff; }
         .btn-export { background: #27AE60; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; font-size: 14px; }
 /* --- CSS 開始 --- */
-
 /* 1. 強制地圖彈窗（Popup）層級置頂，確保不被圓點覆蓋 */
 .maplibregl-popup {
     z-index: 999999 !important; 
 }
-
 .maplibregl-popup-content {
     padding: 0 !important; /* 移除內距讓圖片與凍結標題填滿 */
     box-shadow: 0 10px 25px rgba(0,0,0,0.3);
     border-radius: 8px;
     overflow: hidden;
 }
-
 /* 2. 小窗內部容器與滾動設定 */
 .popup-container { 
     width: 320px; 
@@ -57,7 +54,6 @@
     background: #ffffff;
     position: relative;
 }
-
 /* 3. 核心功能：案名、獲獎資訊與圖片 首欄凍結 */
 .sticky-header {
     position: sticky;
@@ -67,28 +63,24 @@
     border-bottom: 2px solid #27AE60;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
-
 .sticky-案名 {
     padding: 12px 15px 5px 15px;
     font-size: 14px;
     font-weight: bold;
     color: #27AE60;
 }
-
 .sticky-獲獎 {
     padding: 0 15px 10px 15px;
     font-size: 11px;
     color: #E67E22;
     font-weight: bold;
 }
-
 /* 4. 圖片自動縮放至框內 */
 .popup-container img { 
     width: 100% !important; 
     height: auto !important; 
     display: block;
 }
-
 /* 5. 表格排版與第一列寬度修正 */
 .popup-container .content-box { padding: 0 15px 15px 15px; } 
 .popup-container table { width: 100%; border-collapse: collapse; margin-top: 5px; }
@@ -102,7 +94,6 @@
     padding: 6px 8px; /* 增加內距 */
 }
 /* --- CSS 結束 --- */
-
 /* 自定義垂直投影按鈕樣式 */
 .maplibregl-ctrl-pitch {
     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z' fill='%23333'/%3E%3C/svg%3E");
@@ -110,13 +101,11 @@
     background-repeat: no-repeat;
     background-position: center;
 }
-
     </style>
 </head>
 <body>
 
 <div id="status" style="position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(0,0,0,0.8); color:white; padding:10px 25px; border-radius:30px;">正在讀取資料...</div>
-
 <div id="map">
 <div class="map-style-ctrl">
     <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">🗺️ 地圖與影像</div>
@@ -126,7 +115,6 @@
     </select>
 </div>
 </div>
-
 <div id="sidebar">
     <div class="accordion-item">
         <div class="accordion-header active" onclick="toggleAccordion(this, 'content1')">
@@ -143,7 +131,6 @@
             </div>
         </div>
     </div>
-
     <div class="accordion-item">
         <div class="accordion-header" id="header2" onclick="toggleAccordion(this, 'content2')">
             <h3 class="section-title">第二階段：屬性篩選</h3><span class="arrow-icon">▼</span>
@@ -158,19 +145,16 @@
             <input type="range" id="min-slider" min="0" max="6" value="0" oninput="handleSlider()">
             <input type="range" id="max-slider" min="0" max="6" value="6" oninput="handleSlider()">
         </div>
-
         <div class="filter-group" style="margin-top:15px;">
             <div id="start-year-display" style="font-size:11px; color:#E67E22; text-align:center; font-weight:bold;">開始年份：2010 以上</div>
             <div class="range-slider-container">
                 <input type="range" id="filter-start-year" min="2010" max="2026" value="2010" oninput="handleDateFilter()">
             </div>
-            
-            <div id="end-year-display" style="font-size:11px; color:#E67E22; margin-top:10px; text-align:center; font-weight:bold;">結束年份：2026 以下</div>
-            <div class="range-slider-container">
+                <div id="end-year-display" style="font-size:11px; color:#E67E22; margin-top:10px; text-align:center; font-weight:bold;">結束年份：2026 以下</div>
+                <div class="range-slider-container">
                 <input type="range" id="filter-end-year" min="2010" max="2026" value="2026" oninput="handleDateFilter()">
             </div>
         </div>
-
         <button class="btn-export" onclick="exportToCSV()">📊 匯出所選 CSV</button>
         <button class="btn-export" style="background: #E67E22; margin-top: 5px;" onclick="exportSatelliteImageBatch()">🖼️ 批量匯出高清衛星圖</button>
     </div>
@@ -179,7 +163,6 @@
     <div id="result-count" style="font-size:12px; color:#1A5276; padding:10px; background:#eef2f5; font-weight:bold;">符合：0 筆</div>
     <div id="result-list"></div>
 </div>
-
 <script>
     // 12 種類別顏色定義
     const categoryColors = {
