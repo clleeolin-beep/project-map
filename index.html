@@ -33,7 +33,18 @@
         .range-slider-container input { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; z-index: 2; }
         .range-slider-container input::-webkit-slider-thumb { position: relative; z-index: 5; pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #1A5276; -webkit-appearance: none; cursor: pointer; border: 2px solid #fff; }
         .btn-export { background: #27AE60; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; font-size: 14px; }
-        .popup-container { width: 250px; font-size: 12px; }
+        .popup-container { 
+    width: 320px; 
+    font-size: 12px; 
+    line-height: 1.5; 
+    max-height: 400px; 
+    overflow-y: auto; 
+    padding-right: 5px; 
+}
+/* 自定義捲軸樣式 */
+.popup-container::-webkit-scrollbar { width: 4px; }
+.popup-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+
 /* 自定義垂直投影按鈕樣式 */
 .maplibregl-ctrl-pitch {
     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z' fill='%23333'/%3E%3C/svg%3E");
@@ -178,31 +189,51 @@ if (navGroup) {
     const levels = [0, 1e6, 1e7, 5e7, 1e8, 5e8, 1e12];
 
     function loadSpreadsheetData() {
-        const ssId = "19GZRlk-nx6xR-EL3JtS6bBrB_POCPIQgQdeKVN5O7C8";
-        const sheets = Object.keys(categoryColors);
-        let loaded = 0;
-        sheets.forEach((name, idx) => {
-            const cbName = `cb_${idx}`;
-            window[cbName] = (json) => {
-                if (json.table) {
-                    json.table.rows.forEach(row => {
-                        const get = (i) => (row.c && row.c[i]) ? (row.c[i].f || row.c[i].v || "") : "";
-                        let wkt = String(get(0));
-                        if (!wkt || wkt.includes("座標") || wkt === "--") return;
-                        projectData.push({
-                            wkt: wkt, 案號: get(1), 簡稱: get(2), 業主: get(5), 位置: get(6), 經理: get(10),
-                            經費值: parseFloat(String(get(8)).replace(/[^0-9.]/g, "")) || 0,
-                            分類: name, 縣市: String(get(6)).substring(0, 3), selected: true
-                        });
+    const ssId = "19GZRlk-nx6xR-EL3JtS6bBrB_POCPIQgQdeKVN5O7C8";
+    const sheets = Object.keys(categoryColors);
+    let loaded = 0;
+    sheets.forEach((name, idx) => {
+        const cbName = `cb_${idx}`;
+        window[cbName] = (json) => {
+            if (json.table) {
+                json.table.rows.forEach(row => {
+                    const get = (i) => (row.c && row.c[i]) ? (row.c[i].f || row.c[i].v || "") : "";
+                    let wkt = String(get(0));
+                    if (!wkt || wkt.includes("座標") || wkt === "--") return;
+
+                    // 依序抓取 17 個欄位 (A-Q)
+                    projectData.push({
+                        wkt: wkt,                    // A: 座標
+                        案號: get(1),                // B
+                        案件簡稱: get(2),            // C
+                        契約案名: get(3),            // D
+                        工程名稱: get(4),            // E
+                        業主: get(5),                // F
+                        所在位置: get(6),            // G
+                        面積規模: get(7),            // H
+                        經費: get(8),                // I
+                        經費值: parseFloat(String(get(8)).replace(/[^0-9.]/g, "")) || 0,
+                        實績照片: get(9),            // J
+                        案件屬性: get(10),           // K
+                        獲獎資訊: get(11),           // L
+                        執行組別: get(12),           // M
+                        計畫主持人: get(13),         // N
+                        關鍵法條: get(14),           // O
+                        起訖日期: get(15),           // P
+                        備註: get(16),               // Q
+                        分類: name,
+                        縣市: String(get(6)).substring(0, 3),
+                        selected: true
                     });
-                }
-                if (++loaded === sheets.length) finalize();
-            };
-            const s = document.createElement('script');
-            s.src = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=responseHandler:${cbName}&sheet=${encodeURIComponent(name)}`;
-            document.body.appendChild(s);
-        });
-    }
+                });
+            }
+            if (++loaded === sheets.length) finalize();
+        };
+        const s = document.createElement('script');
+        s.src = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=responseHandler:${cbName}&sheet=${encodeURIComponent(name)}`;
+        document.body.appendChild(s);
+    });
+}
 
     function finalize() {
         document.getElementById('status').style.display = 'none';
@@ -213,14 +244,39 @@ if (navGroup) {
     }
 
     function createProjectMarker(p) {
-        let coords = parseWKT(p.wkt);
-        if (!coords) return null;
-        const el = document.createElement('div');
-        const color = categoryColors[p.分類] || "#333";
-        el.style = `width:14px;height:14px;background-color:${color};border-radius:50%;border:2px solid white;cursor:pointer;`;
-        const popup = new maplibregl.Popup({ offset: 15 }).setHTML(`<div class="popup-container"><b style="color:${color}">${p.簡稱}</b><hr>業主：${p.業主}<br>經理：${p.經理}</div>`);
-        return new maplibregl.Marker({ element: el }).setLngLat(coords).setPopup(popup);
+    let coords = parseWKT(p.wkt);
+    if (!coords) return null;
+    const el = document.createElement('div');
+    const color = categoryColors[p.分類] || "#333";
+    
+    // 強化標點視覺 (取消透明度)
+    el.style = `width:14px;height:14px;background-color:${color};border-radius:50%;border:2px solid #ffffff;cursor:pointer;opacity:1;box-shadow:0 0 4px rgba(0,0,0,0.3);`;
+
+    // 關鍵：修正 Google Drive 圖片連結
+    let imageUrl = p.實績照片;
+    if (imageUrl && imageUrl.includes('drive.google.com')) {
+        const fileId = imageUrl.match(/\/d\/([^\/]+)/) || imageUrl.match(/id=([^\&]+)/);
+        if (fileId) imageUrl = `https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=${fileId[1]}`;
     }
+
+    const popupHtml = `
+        <div class="popup-container">
+            <div style="font-size: 14px; font-weight: bold; color: #27AE60; margin-bottom: 8px;">${p.工程名稱 || p.案件簡稱}</div>
+            <hr style="border:0.5px solid #eee;">
+            ${imageUrl ? `<img src="${imageUrl}" style="width:100%; border-radius:4px; margin-bottom:10px;" onerror="this.style.display='none'">` : ''}
+            <table style="width:100%; font-size:12px; border-collapse: collapse;">
+                <tr><td style="width:85px; color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">案號</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.案號}</td></tr>
+                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">正式案名</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.契約案名}</td></tr>
+                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">業主</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.業主}</td></tr>
+                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">面積規模</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.面積規模}</td></tr>
+                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">計畫主持人</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.計畫主持人}</td></tr>
+                <tr><td style="color:#666; font-weight:bold; padding:4px 0;">備註</td><td style="padding:4px 0;">${p.備註}</td></tr>
+            </table>
+        </div>`;
+
+    const popup = new maplibregl.Popup({ offset: 15, maxWidth: '320px' }).setHTML(popupHtml);
+    return new maplibregl.Marker({ element: el }).setLngLat(coords).setPopup(popup);
+}
 
     function parseWKT(wkt) {
         try {
@@ -236,32 +292,45 @@ if (navGroup) {
         else projectData[i].marker.remove();
     }
 
-    function filterProjects() {
-        const city = document.getElementById('city-filter').value;
-        const searchStr = document.getElementById('search-input').value.toLowerCase();
-        const minV = levels[document.getElementById('min-slider').value];
-        const maxV = levels[document.getElementById('max-slider').value];
-        const checkedTypes = Array.from(document.querySelectorAll('#type-checkbox-group input:checked')).map(el => el.value);
-        const list = document.getElementById('result-list');
-        list.innerHTML = '';
-        let count = 0;
-        projectData.forEach((p, index) => {
-            if (!p.marker) return;
-            let mSpatial = polygonFilter ? turf.booleanPointInPolygon(turf.point(p.marker.getLngLat().toArray()), polygonFilter) : (city === "全國" || p.縣市 === city);
-            let mType = checkedTypes.includes(p.分類);
-            let mPrice = (p.經費值 >= minV && p.經費值 <= maxV);
-            let mSearch = !searchStr || (p.簡稱 + p.業主 + p.經理).toLowerCase().includes(searchStr);
-            if (mSpatial && mType && mPrice && mSearch) {
-                count++;
-                if (p.selected) p.marker.addTo(map); else p.marker.remove();
-                let div = document.createElement('div');
-                div.className = 'result-item'; div.style.borderLeft = `6px solid ${categoryColors[p.分類]}`;
-                div.innerHTML = `<div style="display:flex;align-items:center;"><input type="checkbox" ${p.selected?'checked':''} onclick="toggleSelect(event,${index})" style="margin-right:10px;"><div style="flex:1" onclick="map.flyTo({center:[${p.marker.getLngLat().lng},${p.marker.getLngLat().lat}],zoom:16,pitch:65});p.marker.togglePopup()"><div class="item-title">${p.簡稱}</div><div class="item-subtitle">${p.業主}</div></div></div>`;
-                list.appendChild(div);
-            } else { p.marker.remove(); }
-        });
-        document.getElementById('result-count').innerText = `符合： ${count} 筆`;
-    }
+function filterProjects() {
+    const city = document.getElementById('city-filter').value;
+    const searchStr = document.getElementById('search-input').value.toLowerCase();
+    const minV = levels[document.getElementById('min-slider').value];
+    const maxV = levels[document.getElementById('max-slider').value];
+    const checkedTypes = Array.from(document.querySelectorAll('#type-checkbox-group input:checked')).map(el => el.value);
+    const list = document.getElementById('result-list');
+    list.innerHTML = '';
+    let count = 0;
+    
+    projectData.forEach((p, index) => {
+        if (!p.marker) return;
+        let mSpatial = polygonFilter ? turf.booleanPointInPolygon(turf.point(p.marker.getLngLat().toArray()), polygonFilter) : (city === "全國" || p.縣市 === city);
+        let mType = checkedTypes.includes(p.分類);
+        let mPrice = (p.經費值 >= minV && p.經費值 <= maxV);
+        
+        // 修正：同步搜尋關鍵字為 17 欄位中的 簡稱、業主 與 計畫主持人
+        let mSearch = !searchStr || (p.案件簡稱 + p.業主 + p.計畫主持人 + p.案號).toLowerCase().includes(searchStr);
+        
+        if (mSpatial && mType && mPrice && mSearch) {
+            count++;
+            if (p.selected) p.marker.addTo(map); else p.marker.remove();
+            let div = document.createElement('div');
+            div.className = 'result-item'; div.style.borderLeft = `6px solid ${categoryColors[p.分類]}`;
+            
+            // 修正：列表標題改為 p.案件簡稱，並優化 flyTo 與彈窗觸發
+            div.innerHTML = `
+                <div style="display:flex;align-items:center;">
+                    <input type="checkbox" ${p.selected?'checked':''} onclick="toggleSelect(event,${index})" style="margin-right:10px;">
+                    <div style="flex:1" onclick="map.flyTo({center:[${p.marker.getLngLat().lng},${p.marker.getLngLat().lat}],zoom:16,pitch:65}); p.marker.togglePopup()">
+                        <div class="item-title">${p.案件簡稱}</div>
+                        <div class="item-subtitle">${p.業主}</div>
+                    </div>
+                </div>`;
+            list.appendChild(div);
+        } else { p.marker.remove(); }
+    });
+    document.getElementById('result-count').innerText = `符合： ${count} 筆`;
+}
 
     // 繪製功能
     let drawPoints = [];
@@ -287,25 +356,32 @@ if (navGroup) {
 function switchStyle(val) {
     map.setStyle(val === 'osm' ? osmStyle : esriStyle);
     
+    // 修正：確保切換風格後，標點依然存在，且如果是衛星圖則優化顯示
     map.once('style.load', () => {
+        projectData.forEach(p => { if(p.selected) p.marker.addTo(map); });
         if (val === 'esri') {
-            // 強制影像圖層使用雙線性過濾，減少不同階層間的顆粒與色差感
             if (map.getLayer('esri-layer')) {
                 map.setPaintProperty('esri-layer', 'raster-resampling', 'linear');
-                map.setPaintProperty('esri-layer', 'raster-fade-duration', 500); // 延長淡入時間
+                map.setPaintProperty('esri-layer', 'raster-fade-duration', 500);
             }
         }
-        // ...其餘現有的 3D 建物載入邏輯...
     });
-}    function toggleAccordion(h, id) { h.classList.toggle('active'); document.getElementById(id).classList.toggle('show'); }
+}
+    function toggleAccordion(h, id) { h.classList.toggle('active'); document.getElementById(id).classList.toggle('show'); }
     function handleSlider() { let s1 = document.getElementById('min-slider'), s2 = document.getElementById('max-slider'); if (parseInt(s1.value) > parseInt(s2.value)) [s1.value, s2.value] = [s2.value, s1.value]; document.getElementById('price-display').innerText = `經費：${levelNames[s1.value]} ~ ${levelNames[s2.value]}`; filterProjects(); }
     function handleCityFilter() { if (polygonFilter) clearSpatialFilter(); filterProjects(); }
     function toggleAllTypes(c) { document.querySelectorAll('#type-checkbox-group input').forEach(i => i.checked = c); filterProjects(); }
-    function exportToCSV() {
-        let toExport = projectData.filter(p => p.selected && p.marker.getElement().parentElement);
-        let csv = "\ufeff案號,分類,簡稱,業主\n" + toExport.map(p => `"${p.案號}","${p.分類}","${p.簡稱}","${p.業主}"`).join("\n");
-        let link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = "實績匯出.csv"; link.click();
-    }
+function exportToCSV() {
+    let toExport = projectData.filter(p => p.selected && p.marker.getElement().parentElement);
+    // 修正：調整為對應 17 欄位的新變數名稱
+    let csv = "\ufeff案號,分類,案件簡稱,契約案名,業主,所在位置,經費,計畫主持人\n" + 
+              toExport.map(p => `"${p.案號}","${p.分類}","${p.案件簡稱}","${p.契約案名}","${p.業主}","${p.所在位置}","${p.經費}","${p.計畫主持人}"`).join("\n");
+    
+    let link = document.createElement("a"); 
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); 
+    link.download = "實績匯整匯出.csv"; 
+    link.click();
+}
 
     const container = document.getElementById('type-checkbox-group');
     for (let cat in categoryColors) { container.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${cat}" checked onchange="filterProjects()"> ${cat}</label>`; }
