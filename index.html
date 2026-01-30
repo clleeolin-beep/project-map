@@ -33,18 +33,77 @@
         .range-slider-container input { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; z-index: 2; }
         .range-slider-container input::-webkit-slider-thumb { position: relative; z-index: 5; pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #1A5276; -webkit-appearance: none; cursor: pointer; border: 2px solid #fff; }
         .btn-export { background: #27AE60; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; font-size: 14px; }
-        .popup-container { 
+/* 強化彈窗容器：確保絕對在最上層 */
+/* 強化彈窗容器：確保寬度足夠且在最上層 */
+.popup-container { 
     width: 320px; 
     font-size: 12px; 
     line-height: 1.5; 
     max-height: 400px; 
     overflow-y: auto; 
     padding-right: 5px; 
+    background: #ffffff !important; 
+    position: relative;
+    z-index: 999999; 
 }
-/* 自定義捲軸樣式 */
-.popup-container::-webkit-scrollbar { width: 4px; }
-.popup-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+/* 強制修正 MapLibre 原生小窗容器與層級 */
+.maplibregl-popup {
+    z-index: 999999 !important; /* 確保在所有 Marker 之上 */
+}
 
+.maplibregl-popup-content {
+    padding: 0 !important; /* 移除內距讓圖片填滿 */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* 小窗內部容器 */
+.popup-container { 
+    width: 320px; 
+    font-size: 12px; 
+    line-height: 1.5; 
+    max-height: 450px; 
+    overflow-y: auto; 
+    background: #ffffff;
+}
+/* 核心修正：首欄凍結區域 (案名 + 圖片) */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #ffffff;
+    border-bottom: 2px solid #27AE60;
+}
+
+.sticky-案名 {
+    padding: 12px 15px 8px 15px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #27AE60;
+    background: #ffffff;
+}
+/* 核心修正：圖片自動縮放至框內，不留白 */
+.popup-container img { 
+    width: 100% !important; 
+    height: auto !important; 
+    display: block;
+    border-bottom: 1px solid #eee;
+}
+
+/* 表格內容滾動區域 */
+.popup-container .content-box { padding: 0 15px 15px 15px; } 
+.popup-container table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+.popup-container td { vertical-align: top; padding: 6px 4px; border-bottom: 1px solid #f0f0f0; }
+.popup-container td:first-child { width: 95px; color: #666; font-weight: bold; background: #fcfcfc; }
+
+/* 修正第一列寬度，解決換行問題 */
+.popup-container td:first-child { 
+    width: 95px; /* 增加寬度以容納「計畫主持人」 */
+    color: #666; 
+    font-weight: bold; 
+    background: #fcfcfc;
+}
 /* 自定義垂直投影按鈕樣式 */
 .maplibregl-ctrl-pitch {
     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z' fill='%23333'/%3E%3C/svg%3E");
@@ -100,6 +159,7 @@
                     <input type="range" id="max-slider" min="0" max="6" value="6" oninput="handleSlider()">
                 </div>
                 <button class="btn-export" onclick="exportToCSV()">📊 匯出所選 CSV</button>
+                <button class="btn-export" style="background: #E67E22; margin-top: 5px;" onclick="exportSatelliteImageBatch()">🖼️ 批量匯出高清衛星圖</button>
             </div>
         </div>
     </div>
@@ -149,6 +209,7 @@ const esriStyle = {
 };
     var map = new maplibregl.Map({ container: 'map', style: osmStyle, center: [121.0, 23.8], zoom: 7, pitch: 45 });
     map.addControl(new maplibregl.NavigationControl());
+map.on('click', (e) => {});
 // 在原生的 NavigationControl 容器中插入按鈕
 const navGroup = document.querySelector('.maplibregl-ctrl-group');
 if (navGroup) {
@@ -243,41 +304,78 @@ if (navGroup) {
         filterProjects();
     }
 
-    function createProjectMarker(p) {
+function createProjectMarker(p) {
     let coords = parseWKT(p.wkt);
     if (!coords) return null;
     const el = document.createElement('div');
     const color = categoryColors[p.分類] || "#333";
     
-    // 強化標點視覺 (取消透明度)
-    el.style = `width:14px;height:14px;background-color:${color};border-radius:50%;border:2px solid #ffffff;cursor:pointer;opacity:1;box-shadow:0 0 4px rgba(0,0,0,0.3);`;
+    // 設定點位樣式，zIndex 設為 0
+    el.style.width = '14px';
+    el.style.height = '14px';
+    el.style.backgroundColor = color;
+    el.style.borderRadius = '50%';
+    el.style.border = '2px solid #ffffff';
+    el.style.cursor = 'pointer';
+    el.style.zIndex = '0'; // 點位層級最低
+    el.style.boxShadow = '0 0 6px rgba(0,0,0,0.6)';
 
-    // 關鍵：修正 Google Drive 圖片連結
     let imageUrl = p.實績照片;
     if (imageUrl && imageUrl.includes('drive.google.com')) {
-        const fileId = imageUrl.match(/\/d\/([^\/]+)/) || imageUrl.match(/id=([^\&]+)/);
-        if (fileId) imageUrl = `https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=${fileId[1]}`;
+        const fileIdMatch = imageUrl.match(/[-\w]{25,}/);
+        if (fileIdMatch) imageUrl = `https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=${fileIdMatch[0]}`;
     }
 
+// 重新編排 HTML：案名與圖片置頂凍結
     const popupHtml = `
         <div class="popup-container">
-            <div style="font-size: 14px; font-weight: bold; color: #27AE60; margin-bottom: 8px;">${p.工程名稱 || p.案件簡稱}</div>
-            <hr style="border:0.5px solid #eee;">
-            ${imageUrl ? `<img src="${imageUrl}" style="width:100%; border-radius:4px; margin-bottom:10px;" onerror="this.style.display='none'">` : ''}
-            <table style="width:100%; font-size:12px; border-collapse: collapse;">
-                <tr><td style="width:85px; color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">案號</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.案號}</td></tr>
-                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">正式案名</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.契約案名}</td></tr>
-                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">業主</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.業主}</td></tr>
-                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">面積規模</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.面積規模}</td></tr>
-                <tr><td style="color:#666; font-weight:bold; padding:4px 0; border-bottom:1px solid #f0f0f0;">計畫主持人</td><td style="padding:4px 0; border-bottom:1px solid #f0f0f0;">${p.計畫主持人}</td></tr>
-                <tr><td style="color:#666; font-weight:bold; padding:4px 0;">備註</td><td style="padding:4px 0;">${p.備註}</td></tr>
-            </table>
+            <div class="sticky-header">
+                <div class="sticky-案名">${p.契約案名 || p.案件簡稱}</div>
+                ${imageUrl ? `<img src="${imageUrl}" onerror="this.style.display='none'">` : ''}
+            </div>
+            <div class="content-box">
+                <table>
+                    <tr><td>案號</td><td>${p.案號}</td></tr>
+                    <tr><td>案件簡稱</td><td>${p.案件簡稱}</td></tr>
+                    <tr><td>工程名稱</td><td>${p.工程名稱}</td></tr>
+                    <tr><td>業主</td><td>${p.業主}</td></tr>
+                    <tr><td>所在位置</td><td>${p.所在位置}</td></tr>
+                    <tr><td>面積規模</td><td>${p.面積規模}</td></tr>
+                    <tr><td>經費</td><td>${p.經費}</td></tr>
+                    <tr><td>執行組別</td><td>${p.執行組別}</td></tr>
+                    <tr><td>計畫主持人</td><td>${p.計畫主持人}</td></tr>
+                    <tr><td>關鍵法條</td><td>${p.關鍵法條}</td></tr>
+                    <tr><td>起訖日期</td><td>${p.起訖日期}</td></tr>
+                    <tr><td>備註</td><td>${p.備註}</td></tr>
+                    <tr><td>實績分類</td><td>${p.分類}</td></tr>
+                </table>
+            </div>
         </div>`;
+// 建立標點但不預先設置 Popup
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(coords);
 
-    const popup = new maplibregl.Popup({ offset: 15, maxWidth: '320px' }).setHTML(popupHtml);
-    return new maplibregl.Marker({ element: el }).setLngLat(coords).setPopup(popup);
+    // 實作「點擊新案件、關閉舊小窗」的邏輯
+    el.addEventListener('click', (e) => {
+        e.stopPropagation(); // 防止地圖點擊事件干擾
+        
+        // 1. 先關閉全地圖所有現有的 Popup
+        const activePopups = document.getElementsByClassName('maplibregl-popup');
+        while (activePopups[0]) { activePopups[0].remove(); }
+
+        // 2. 在該點位上方開啟新的 Popup
+        new maplibregl.Popup({
+        offset: 35, // 增加偏移量，確保完全避開點位中心
+        maxWidth: '340px',
+        anchor: 'bottom',
+        closeButton: true,
+        closeOnClick: true 
+})
+        .setLngLat(coords)
+        .setHTML(popupHtml)
+        .addTo(map);
+});
+return marker;
 }
-
     function parseWKT(wkt) {
         try {
             let match = wkt.includes("POINT") ? wkt.match(/\(([^)]+)\)/)[1].trim().split(/\s+/) : wkt.match(/\(\(([^,]+)/)[1].trim().split(/\s+/);
@@ -307,8 +405,6 @@ function filterProjects() {
         let mSpatial = polygonFilter ? turf.booleanPointInPolygon(turf.point(p.marker.getLngLat().toArray()), polygonFilter) : (city === "全國" || p.縣市 === city);
         let mType = checkedTypes.includes(p.分類);
         let mPrice = (p.經費值 >= minV && p.經費值 <= maxV);
-        
-        // 修正：同步搜尋關鍵字為 17 欄位中的 簡稱、業主 與 計畫主持人
         let mSearch = !searchStr || (p.案件簡稱 + p.業主 + p.計畫主持人 + p.案號).toLowerCase().includes(searchStr);
         
         if (mSpatial && mType && mPrice && mSearch) {
@@ -316,8 +412,6 @@ function filterProjects() {
             if (p.selected) p.marker.addTo(map); else p.marker.remove();
             let div = document.createElement('div');
             div.className = 'result-item'; div.style.borderLeft = `6px solid ${categoryColors[p.分類]}`;
-            
-            // 修正：列表標題改為 p.案件簡稱，並優化 flyTo 與彈窗觸發
             div.innerHTML = `
                 <div style="display:flex;align-items:center;">
                     <input type="checkbox" ${p.selected?'checked':''} onclick="toggleSelect(event,${index})" style="margin-right:10px;">
@@ -331,7 +425,6 @@ function filterProjects() {
     });
     document.getElementById('result-count').innerText = `符合： ${count} 筆`;
 }
-
     // 繪製功能
     let drawPoints = [];
     function startDraw() {
@@ -356,14 +449,16 @@ function filterProjects() {
 function switchStyle(val) {
     map.setStyle(val === 'osm' ? osmStyle : esriStyle);
     
-    // 修正：確保切換風格後，標點依然存在，且如果是衛星圖則優化顯示
     map.once('style.load', () => {
-        projectData.forEach(p => { if(p.selected) p.marker.addTo(map); });
-        if (val === 'esri') {
-            if (map.getLayer('esri-layer')) {
-                map.setPaintProperty('esri-layer', 'raster-resampling', 'linear');
-                map.setPaintProperty('esri-layer', 'raster-fade-duration', 500);
-            }
+        // 先清除舊標點
+        projectData.forEach(p => { if (p.marker) p.marker.remove(); });
+        // 重新生成帶有正確 zIndex 的標點
+        projectData.forEach(p => { p.marker = createProjectMarker(p); });
+        // 執行篩選顯示
+        filterProjects();
+
+        if (val === 'esri' && map.getLayer('esri-layer')) {
+            map.setPaintProperty('esri-layer', 'raster-resampling', 'linear');
         }
     });
 }
@@ -385,7 +480,138 @@ function exportToCSV() {
 
     const container = document.getElementById('type-checkbox-group');
     for (let cat in categoryColors) { container.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${cat}" checked onchange="filterProjects()"> ${cat}</label>`; }
+async function exportSatelliteImage() {
+    if (!polygonFilter) {
+        alert("請先完成第一階段的「繪製篩選區域」！");
+        return;
+    }
+
+    const statusEl = document.getElementById('status');
+    statusEl.style.display = 'block';
+    statusEl.innerText = "正在計算瓦片並準備拼接圖片...";
+
+    try {
+        // 1. 取得圈選範圍的邊界 (BBox)
+        const bbox = turf.bbox(polygonFilter); // [minLng, minLat, maxLng, maxLat]
+        const zoom = 18; // 設定最精細尺度 (通常為 18 或 19)
+
+        // 2. 座標轉瓦片索引 (經緯度轉 Tile XYZ)
+        const lon2tile = (lon, zoom) => Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+        const lat2tile = (lat, zoom) => Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+
+        const startX = lon2tile(bbox[0], zoom);
+        const endX = lon2tile(bbox[2], zoom);
+        const startY = lat2tile(bbox[3], zoom);
+        const endY = lat2tile(bbox[1], zoom);
+
+        const width = (endX - startX + 1) * 256;
+        const height = (endY - startY + 1) * 256;
+
+        if (width > 8000 || height > 8000) {
+            if (!confirm("範圍過大，生成的圖片解析度極高，可能會造成瀏覽器當機。是否繼續？")) {
+                statusEl.style.display = 'none';
+                return;
+            }
+        }
+
+        // 3. 建立畫布
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // 4. 下載並拼接瓦片 (使用 Esri 衛星圖源)
+        const tilePromises = [];
+        for (let x = startX; x <= endX; x++) {
+            for (let y = startY; y <= endY; y++) {
+                const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+                tilePromises.push(new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => {
+                        ctx.drawImage(img, (x - startX) * 256, (y - startY) * 256);
+                        resolve();
+                    };
+                    img.onerror = resolve; // 即使某塊失敗也繼續
+                    img.src = url;
+                }));
+            }
+        }
+
+        await Promise.all(tilePromises);
+
+        // 5. 導出圖片
+        const link = document.createElement('a');
+        link.download = `惇陽衛星影像_${new Date().getTime()}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+
+        statusEl.innerText = "匯出成功！";
+        setTimeout(() => statusEl.style.display = 'none', 2000);
+
+    } catch (err) {
+        console.error(err);
+        alert("匯出失敗，請縮小圈選範圍後再試一次。");
+        statusEl.style.display = 'none';
+    }
+}
     loadSpreadsheetData();
+async function exportSatelliteImageBatch() {
+    if (!polygonFilter) { alert("請先完成第一階段的「繪製篩選區域」！"); return; }
+    const statusEl = document.getElementById('status');
+    statusEl.style.display = 'block';
+    try {
+        const bbox = turf.bbox(polygonFilter); 
+        const zoom = 18;
+        const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * Math.pow(2, z));
+        const lat2tile = (lat, z) => Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
+        
+        const startX = lon2tile(bbox[0], zoom);
+        const endX = lon2tile(bbox[2], zoom);
+        const startY = lat2tile(bbox[3], zoom);
+        const endY = lat2tile(bbox[1], zoom);
+        
+        const maxTilesPerSide = 16; 
+        const chunksX = Math.ceil((endX - startX + 1) / maxTilesPerSide);
+        const chunksY = Math.ceil((endY - startY + 1) / maxTilesPerSide);
+
+        for (let cy = 0; cy < chunksY; cy++) {
+            for (let cx = 0; cx < chunksX; cx++) {
+                const cSX = startX + (cx * maxTilesPerSide);
+                const cEX = Math.min(startX + ((cx + 1) * maxTilesPerSide) - 1, endX);
+                const cSY = startY + (cy * maxTilesPerSide);
+                const cEY = Math.min(startY + ((cy + 1) * maxTilesPerSide) - 1, endY);
+                
+                statusEl.innerText = `正在處理第 (${cx+1}/${chunksX}, ${cy+1}/${chunksY}) 張高清圖...`;
+                const canvas = document.createElement('canvas');
+                canvas.width = (cEX - cSX + 1) * 256; canvas.height = (cEY - cSY + 1) * 256;
+                const ctx = canvas.getContext('2d');
+                
+                const tilePromises = [];
+                for (let x = cSX; x <= cEX; x++) {
+                    for (let y = cSY; y <= cEY; y++) {
+                        const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+                        tilePromises.push(new Promise((resolve) => {
+                            const img = new Image();
+                            img.crossOrigin = "Anonymous";
+                            img.onload = () => { ctx.drawImage(img, (x - cSX) * 256, (y - cSY) * 256); resolve(); };
+                            img.onerror = resolve;
+                            img.src = url;
+                        }));
+                    }
+                }
+                await Promise.all(tilePromises);
+                const link = document.createElement('a');
+                link.download = `惇陽衛星圖_${cx+1}_${cy+1}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                await new Promise(r => setTimeout(r, 800)); // 防止瀏覽器阻擋
+            }
+        }
+        statusEl.innerText = "批量匯出完成！";
+        setTimeout(() => statusEl.style.display = 'none', 2000);
+    } catch (err) { alert("匯出失敗。"); statusEl.style.display = 'none'; }
+}
 </script>
 </body>
 </html>
